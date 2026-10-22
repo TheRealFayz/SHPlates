@@ -4,6 +4,8 @@
 
 SHPlates puts threat, cast bars, debuff timers, and combo points right on the nameplates, and remembers your setup for each talent build. It stands on its own, no other addon needed. **Know who has aggro before the mob gets to your healer.**
 
+You can also download SHPlates from OctoWoW's [Gitea](https://octowow.st/git/Fayz/SHPlates).
+
 > **There be dragons here:** the Neon theme still needs a lot of testing. Grey is the one that's been played on. Neon works, but expect rough edges with its layout (combo points, text, and icon spacing). If something looks off, a screenshot and a note on what you were doing helps a lot.
 
 ## Features
