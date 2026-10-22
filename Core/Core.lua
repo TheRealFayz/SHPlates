@@ -37,6 +37,31 @@ local inCombat, HasTarget = false, false
 local targetGUID, targetName
 local Plates, PlatesVisible = {}, {}
 local GUID = {}
+
+-- How far a plate's health bar is from what the GUID's unit really has (0-1)
+local function HealthMismatch(plate, guid)
+	local ext = plate.extended
+	local bar = ext and ext.bars and ext.bars.health
+	if not bar then return 0 end
+	local _, barMax = bar:GetMinMaxValues()
+	local realMax = UnitHealthMax(guid)
+	if not (barMax and barMax > 0 and realMax and realMax > 0) then return 0 end
+	return math.abs((bar:GetValue() or 0) / barMax - (UnitHealth(guid) or 0) / realMax)
+end
+
+-- The plate's GUID, unless another visible plate holds the same one and fits
+-- it better. The client can leave a recycled plate holding the previous mob's
+-- GUID; in a pack of same-named mobs the name check can't catch that, and two
+-- plates would read one mob (its debuffs showing on both). Health decides.
+local function ResolveGUID(plate, plateName)
+	local guid = C.PlateGUID(plate, plateName)
+	if not guid then return nil end
+	local other = GUID[guid]
+	if other and other ~= plate and other:IsShown() then
+		if HealthMismatch(plate, guid) >= HealthMismatch(other, guid) then return nil end
+	end
+	return guid
+end
 local nameplate, extended, bars, regions, visual
 local unit, unitcache, style, stylename
 local lastMouseover, currentTarget, unitchanged
@@ -492,7 +517,7 @@ do
 	end
 
 	local function GatherData_GUID(plate)
-		local guid = C.PlateGUID(plate, regions.name:GetText())
+		local guid = ResolveGUID(plate, regions.name:GetText())
 		if guid ~= unit.guid then
 			if unit.guid and GUID[unit.guid] == plate then GUID[unit.guid] = nil end
 			unit.guid = guid
@@ -506,8 +531,11 @@ do
 	local function GatherData_Target()
 		if unit.guid and targetGUID then
 			unit.isTarget = (unit.guid == targetGUID)
-		elseif HasTarget then
-			-- Without SuperWoW: best effort by name
+		elseif HasTarget and not C.HasSuperWoW then
+			-- Without SuperWoW: best effort by name. With SuperWoW a plate whose
+			-- GUID isn't confirmed yet is NOT the target: matching by name
+			-- would make every same-named mob in a pack "the target" and copy
+			-- the target's debuffs, combo points and threat onto all of them.
 			unit.isTarget = (unit.name == targetName)
 		else
 			unit.isTarget = false
@@ -749,7 +777,7 @@ do
 		if not plate:IsShown() then return end
 		UpdateReferences(plate)
 		local oldguid = unit.guid
-		local guid = C.PlateGUID(plate, regions.name:GetText())
+		local guid = ResolveGUID(plate, regions.name:GetText())
 		if guid ~= oldguid then
 			-- Vanilla can recycle a visible plate for another unit
 			PrepareNameplate(plate)

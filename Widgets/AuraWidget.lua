@@ -140,7 +140,9 @@ do
 	local function UpdateAuraWidget(frame, unit)
 		local AuraFrames = frame.AuraFrames
 		local unitid = unit.guid
-		if not unitid then
+		-- without SuperWoW only the target / mouseover can be read; with it, a
+		-- plate whose GUID isn't confirmed yet shows nothing rather than guess
+		if not unitid and not C.HasSuperWoW then
 			if unit.isTarget then unitid = "target"
 			elseif unit.isMouseover then unitid = "mouseover" end
 		end
