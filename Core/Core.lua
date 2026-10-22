@@ -1215,6 +1215,7 @@ do
 	end
 
 	PlateHandler:SetScript("OnEvent", function()
+		if SHPlates.disabled then return end  -- GudaPlates is running (see Guard.lua)
 		local handler = events[event]
 		if handler then handler() end
 	end)

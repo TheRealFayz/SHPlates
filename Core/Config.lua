@@ -877,6 +877,8 @@ local recheck = nil
 loader:SetScript("OnEvent", function()
 	if event == "ADDON_LOADED" and arg1 == SHPlates.ADDON then
 		InitDB()
+	elseif SHPlates.disabled then
+		return  -- GudaPlates is running: keep settings loaded, do nothing else
 	elseif event == "PLAYER_ENTERING_WORLD" then
 		if not SHPlatesDB then InitDB() end
 		SHPlates:UseAutoHide(SHPlatesDB.autohide)

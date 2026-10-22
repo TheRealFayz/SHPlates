@@ -16,6 +16,11 @@ SHPlates.ART = "Interface\\AddOns\\SHPlates\\Art\\"
 local C = {}
 SHPlates.Compat = C
 
+-- GudaPlates and SHPlates both take over the same Blizzard nameplates, so
+-- only one can run. Addons load alphabetically, so GudaPlates is usually
+-- already loaded here; Guard.lua also catches it if it loads later.
+SHPlates.disabled = (IsAddOnLoaded and IsAddOnLoaded("GudaPlates")) and true or false
+
 -- SuperWoW: GUIDs on nameplates, GUIDs as unit tokens, UNIT_CASTEVENT, SpellInfo
 C.HasSuperWoW = (SUPERWOW_VERSION ~= nil) or (SpellInfo ~= nil)
 -- Nampower: aura cast events with durations, spell records

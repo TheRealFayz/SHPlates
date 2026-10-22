@@ -4,8 +4,6 @@
 
 SHPlates puts threat, cast bars, debuff timers, and combo points right on the nameplates, and remembers your setup for each talent build. It stands on its own, no other addon needed. **Know who has aggro before the mob gets to your healer.**
 
-You can also download SHPlates from OctoWoW's [Gitea](https://octowow.st/git/Fayz/SHPlates).
-
 > **There be dragons here:** the Neon theme still needs a lot of testing. Grey is the one that's been played on. Neon works, but expect rough edges with its layout (combo points, text, and icon spacing). If something looks off, a screenshot and a note on what you were doing helps a lot.
 
 ## Features
@@ -97,6 +95,8 @@ SHPlates works on a plain client, but these unlock a lot:
 - **SuperWoW** - Cast bars, debuffs, class icons, and elite borders on every plate (not just your target), exact range, solo raid marks, and reliable neutral mob tracking. Strongly recommended.
 - **Nampower** - Exact debuff timers, "only my debuffs", and more reliable interrupt learning. SHPlates turns on the Nampower settings it needs by itself.
 - **pfUI** - SHPlates turns off pfUI's nameplates while it's running, so you don't get two sets. This can be turned off on the General page.
+
+**GudaPlates** can't run alongside SHPlates, since both take over the same nameplates. If GudaPlates is active, SHPlates turns itself off and shows a warning with a button to disable GudaPlates and reload.
 
 ## For Developers
 

@@ -23,6 +23,7 @@ function Marks.Get(guid)
 end
 
 function SHPlates_Mark(index)
+	if SHPlates.disabled then if SHPlates.ShowConflictWarning then SHPlates.ShowConflictWarning() end return end
 	if not UnitExists("target") then return end
 	local guid = C.GUID("target")
 	local current = (GetRaidTargetIndex and GetRaidTargetIndex("target")) or Marks.Get(guid) or 0

@@ -503,6 +503,7 @@ function events.CHAT_MSG_ADDON()
 end
 
 frame:SetScript("OnEvent", function()
+	if SHPlates.disabled then return end
 	local handler = events[event]
 	if handler then handler() end
 end)
@@ -512,6 +513,7 @@ for name in pairs(events) do pcall(frame.RegisterEvent, frame, name) end
 -- Threat queries + drop stale data now and then
 local sweep = 0
 frame:SetScript("OnUpdate", function()
+	if SHPlates.disabled then return end
 	local elapsed = arg1 or 0
 	QueryThreat(elapsed)
 	sweep = sweep + elapsed

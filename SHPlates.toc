@@ -27,3 +27,4 @@ Themes\Grey.lua
 
 Core\Config.lua
 Core\Share.lua
+Core\Guard.lua

@@ -73,6 +73,7 @@ local active, timer, giveUpAt = false, 0, nil
 watcher:RegisterEvent("ADDON_LOADED")
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD")
 watcher:SetScript("OnEvent", function()
+	if SHPlates.disabled then return end
 	if event == "ADDON_LOADED" then
 		if arg1 == SHPlates.ADDON or arg1 == "pfUI" then active = true end
 	elseif event == "PLAYER_ENTERING_WORLD" then
@@ -82,7 +83,7 @@ watcher:SetScript("OnEvent", function()
 	if active and Cf.KillPfUIPlates() then active = false end
 end)
 watcher:SetScript("OnUpdate", function()
-	if not active then return end
+	if not active or SHPlates.disabled then return end
 	timer = timer + (arg1 or 0)
 	if timer < .25 then return end
 	timer = 0
