@@ -1,0 +1,29 @@
+## Interface: 11200
+## Title: SHPlates
+## Notes: Tidy Plates, rebuilt for 1.12 (Turtle WoW / OctoWoW). Best with SuperWoW + Nampower.
+## Author: Fayz (1.12 rebuild of Tidy Plates by Binny the Love Fool)
+## SavedVariables: SHPlatesLearned
+## SavedVariablesPerCharacter: SHPlatesDB
+
+Core\Compat.lua
+Core\Statusbar.lua
+Core\Utility.lua
+Core\Data.lua
+Core\Interrupts.lua
+Core\SpellDurations.lua
+Core\Marks.lua
+Core\Defaults.lua
+Core\Core.lua
+Core\Conflicts.lua
+
+Widgets\WidgetCore.lua
+Widgets\ThreatWidgets.lua
+Widgets\AuraWidget.lua
+Widgets\MiscWidgets.lua
+
+Themes\Shared.lua
+Themes\Neon.lua
+Themes\Grey.lua
+
+Core\Config.lua
+Core\Share.lua

@@ -1,0 +1,11 @@
+<Bindings>
+	<Binding name="SHPLATES_MARK_1" header="SHPLATES">SHPlates_Mark(1)</Binding>
+	<Binding name="SHPLATES_MARK_2">SHPlates_Mark(2)</Binding>
+	<Binding name="SHPLATES_MARK_3">SHPlates_Mark(3)</Binding>
+	<Binding name="SHPLATES_MARK_4">SHPlates_Mark(4)</Binding>
+	<Binding name="SHPLATES_MARK_5">SHPlates_Mark(5)</Binding>
+	<Binding name="SHPLATES_MARK_6">SHPlates_Mark(6)</Binding>
+	<Binding name="SHPLATES_MARK_7">SHPlates_Mark(7)</Binding>
+	<Binding name="SHPLATES_MARK_8">SHPlates_Mark(8)</Binding>
+	<Binding name="SHPLATES_MARK_0">SHPlates_Mark(0)</Binding>
+</Bindings>
