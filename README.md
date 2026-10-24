@@ -40,7 +40,7 @@ A 5-section bar along the top of your target's health bar. Each point lights a s
 - **Works solo too.** Out of a group, marks are local and only you see them.
 
 ### Which Plates Show
-- **Friendly plates** - Show or hide friendly players and NPCs
+- **Friendly plates** - Hide friendly players and NPCs. Players only count as enemies when you can attack them, so on a cross-faction server the other faction stays friendly unless PvP is on.
 - **Critters** - Hide them
 - **Neutral mobs** - Hide them until they join the fight. Once a neutral mob goes after you or your group, it stays shown until it dies or the fight is over.
 - **Non-elites** - Hide them out of combat. Once you're fighting, every hostile plate shows, including totems and summoned adds.

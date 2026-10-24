@@ -78,7 +78,8 @@ end
 do
 	local path = ART .. "ClassWidget\\"
 	local function UpdateClassWidget(self, unit)
-		if unit.class and unit.class ~= "UNKNOWN" then
+		-- "Enemy Class Icon": players you can't attack don't get one
+		if unit.reaction ~= "FRIENDLY" and unit.class and unit.class ~= "UNKNOWN" then
 			self.Icon:SetTexture(path .. unit.class)
 			self:Show()
 		else self:Hide() end

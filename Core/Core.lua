@@ -38,6 +38,26 @@ local targetGUID, targetName
 local Plates, PlatesVisible = {}, {}
 local GUID = {}
 
+-- Show or hide everything a plate draws, part by part. The 1.12 client only
+-- passes a frame's opacity down to the children that exist when it is set,
+-- so widgets a theme creates later (mana bar, class icon...) would stay
+-- visible on a hidden plate. Parts are fully on or off; the plate frame
+-- itself carries the in-between opacity (non-target fading).
+local function SetPartsAlpha(ext, alpha)
+	local a = (alpha and alpha > 0) and 1 or 0
+	local b = ext.bars
+	if b then
+		if b.healthbar then b.healthbar:SetAlpha(a) end
+		if b.castbar then b.castbar:SetAlpha(a) end
+	end
+	if ext.iconFrame then ext.iconFrame:SetAlpha(a) end
+	if ext.widgets then
+		for _, w in pairs(ext.widgets) do
+			if type(w) == "table" and w.SetAlpha then w:SetAlpha(a) end
+		end
+	end
+end
+
 -- How far a plate's health bar is from what the GUID's unit really has (0-1)
 local function HealthMismatch(plate, guid)
 	local ext = plate.extended
@@ -99,7 +119,7 @@ SHPlates.IsAngryNeutral = IsAngryNeutral
 -- Global (theme independent) visibility rules from the General page
 local function IsFilteredOut(u)
 	if u.isTarget then return false end
-	if Opt("showFriendly") == false and u.reaction == "FRIENDLY" then return true end
+	if Opt("hideFriendly") and u.reaction == "FRIENDLY" then return true end
 	if Opt("showCritters") == false and u.isCritter then return true end
 	return false
 end
@@ -364,6 +384,7 @@ do
 		else alpha = unit.alpha or 1 end
 		if IsFilteredOut(unit) or extended.fastHidden then alpha = 0 end
 		extended:SetAlpha(alpha)
+		SetPartsAlpha(extended, alpha)
 		-- Fully transparent plates should not eat clicks either
 		ApplyPlateMouse(nameplate, alpha > 0)
 	end
@@ -495,7 +516,21 @@ do
 		end
 		local guid = unit.guid
 		if guid then
-			if UnitIsPlayer(guid) then unit.type = "PLAYER" else unit.type = "NPC" end
+			if UnitIsPlayer(guid) then
+				-- Players: friend or foe is "can I attack them", not faction.
+				-- On cross-faction servers the other faction reads as neutral
+				-- even when you can't touch them; they're only enemies when
+				-- PvP makes them attackable.
+				unit.type = "PLAYER"
+				if UnitCanAttack("player", guid) then
+					unit.reaction = "HOSTILE"
+				else
+					unit.reaction = "FRIENDLY"
+					unit.red, unit.green, unit.blue = 0, 0, 1   -- vanilla's friendly player blue
+				end
+				return
+			end
+			unit.type = "NPC"
 			local rx = UnitReaction and UnitReaction(guid, "player")
 			if rx then
 				if rx >= 5 then unit.reaction = "FRIENDLY"
@@ -723,6 +758,8 @@ do
 		visual.highlight:Hide()
 		extended.mouseShown = nil
 		if activetheme.OnInitialize then activetheme.OnInitialize(extended) end
+		-- widgets made just now start fully visible: match the plate
+		SetPartsAlpha(extended, extended:GetAlpha())
 	end
 
 	local function FullGather(plate)
@@ -1044,6 +1081,11 @@ local function ShouldFastHide(p)
 	local guid = C.PlateGUID(p, name)
 	if guid and UnitIsUnit(guid, "target") then return false end
 	if not guid and UnitExists("target") and name == UnitName("target") then return false end
+	-- players: attackable ones always show, everyone else is friendly
+	if guid and UnitIsPlayer(guid) then
+		if UnitCanAttack("player", guid) then return false end
+		return Opt("hideFriendly") and true or false
+	end
 
 	local r, g, b = health:GetStatusBarColor()
 	if not r then return false end
@@ -1070,7 +1112,7 @@ local function ShouldFastHide(p)
 	end
 
 	-- friendly
-	return Opt("showFriendly") == false
+	return Opt("hideFriendly") and true or false
 end
 SHPlates.ShouldFastHide = ShouldFastHide
 
@@ -1129,6 +1171,7 @@ do
 				if not ext.fastHidden or ext:GetAlpha() > 0 then
 					ext.fastHidden = true
 					ext:SetAlpha(0)
+					SetPartsAlpha(ext, 0)
 					ApplyPlateMouse(p, false)
 				end
 			elseif ext.fastHidden then

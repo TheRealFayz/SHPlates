@@ -20,7 +20,7 @@ local DEFAULTS = {
 	autohide = false,
 	overlap = false,
 	hidePfUIPlates = true,
-	showFriendly = true,
+	hideFriendly = false,
 	showCritters = false,
 	clickThrough = false,
 	classColorEnemies = true,
@@ -241,6 +241,12 @@ end
 -------------------------------------------------------------------------------
 local function InitDB()
 	if type(SHPlatesDB) ~= "table" then SHPlatesDB = {} end
+	-- "Show friendly plates" became "Hide friendly plates": the box keeps
+	-- the state it had, and checked now means hidden
+	if SHPlatesDB.showFriendly ~= nil then
+		if SHPlatesDB.hideFriendly == nil then SHPlatesDB.hideFriendly = SHPlatesDB.showFriendly and true or false end
+		SHPlatesDB.showFriendly = nil
+	end
 	for k, v in pairs(DEFAULTS) do
 		if SHPlatesDB[k] == nil then
 			if type(v) == "table" then SHPlatesDB[k] = copytable(v) else SHPlatesDB[k] = v end
@@ -658,9 +664,9 @@ local function BuildGeneralPage(page)
 	y = y - 34
 
 	c, h = CreateHeader(child, "Which plates show", y); y = y - h
-	c, h = CreateCheck(child, "Show friendly plates", y,
-		function() return SHPlatesDB.showFriendly end,
-		function(v) SHPlatesDB.showFriendly = v; SHPlates:ForceUpdate() end)
+	c, h = CreateCheck(child, "Hide friendly plates", y,
+		function() return SHPlatesDB.hideFriendly end,
+		function(v) SHPlatesDB.hideFriendly = v; SHPlates:ForceUpdate() end)
 	AddControl(page, c); y = y - h
 	c, h = CreateCheck(child, "Show critters", y,
 		function() return SHPlatesDB.showCritters end,
@@ -950,7 +956,7 @@ SHPlatesSlashCommands.debug = function()
 	local th = SHPlates:GetActiveTheme()
 	local vars = th and th.vars or {}
 	C.print("theme=" .. tostring(activeThemeName) .. " hideNeutral=" .. tostring(vars.OpacityHideNeutral) ..
-		" showCritters=" .. tostring(SHPlatesDB.showCritters) .. " showFriendly=" .. tostring(SHPlatesDB.showFriendly) ..
+		" showCritters=" .. tostring(SHPlatesDB.showCritters) .. " hideFriendly=" .. tostring(SHPlatesDB.hideFriendly) ..
 		" lastError=" .. tostring(SHPlates.lastError))
 	for plate in pairs(SHPlates.VisibleNameplates) do
 		local u = plate.extended and plate.extended.unit
