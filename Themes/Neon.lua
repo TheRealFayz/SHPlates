@@ -16,12 +16,19 @@ local function BuildStyle(theme)
 	theme.healthborder = {
 		texture = artpath .. "Neon_HealthOverlay",
 		glowtexture = artpath .. "Neon_Highlight",
-		elitetexture = artpath .. "Neon_HealthOverlayEliteStar",
+		-- plain border for elites too: the star is its own piece (movable in the Designer)
+		elitetexture = artpath .. "Neon_HealthOverlay",
 		width = 128, height = 32, y = 0,
 	}
 	theme.healthbar = { texture = artpath .. "Neon_Bar", width = 100, height = 32, x = 0, y = 0, }
-	theme.castborder = { texture = artpath .. "Neon_CastOverlayBlue", width = 128, height = 32, x = 0, y = castadjust, }
-	theme.castnostop = { texture = artpath .. "Neon_CastOverlayRed", width = 128, height = 32, x = 0, y = castadjust, }
+	-- the glowing square the spell icon sits in is its own piece (spellbacking),
+	-- so it hides and moves with the icon instead of staying on the bar
+	theme.castborder = { texture = artpath .. "Neon_CastBarBlue", width = 128, height = 32, x = 0, y = castadjust, }
+	theme.castnostop = { texture = artpath .. "Neon_CastBarRed", width = 128, height = 32, x = 0, y = castadjust, }
+	theme.spellbacking = {
+		texture = artpath .. "Neon_CastSquareBlue", nostoptexture = artpath .. "Neon_CastSquareRed",
+		width = 64, height = 32, x = 26, y = castadjust, anchor = "CENTER",
+	}
 	theme.castbar = {
 		texture = artpath .. "Neon_Bar", width = 100, height = 32,
 		x = 0, y = castadjust, anchor = "CENTER", orientation = "HORIZONTAL",
@@ -38,11 +45,13 @@ local function BuildStyle(theme)
 		size = 11, width = 150, height = 11, x = 0, y = nameadjust,
 		align = "CENTER", anchor = "CENTER", vertical = "CENTER", shadow = true,
 	}
+	-- inside the left end of the bar, just right of where the elite star sits
 	theme.level = {
-		size = 9, width = 22, height = 11, x = 5, y = 5,
+		size = 9, width = 22, height = 11, x = 10, y = 0,
 		align = "LEFT", anchor = "LEFT", vertical = "CENTER", flags = "OUTLINE", shadow = false,
 	}
 	theme.dangerskull = { width = 14, height = 14, x = 5, y = 5, anchor = "LEFT", }
+	theme.eliteicon = { texture = artpath .. "Neon_EliteStar", width = 16, height = 16, x = -48, y = 4, anchor = "CENTER", }
 	theme.specialText = {
 		size = 11, width = 150, height = 11, x = 26, y = -19 + castadjust,
 		align = "CENTER", anchor = "CENTER", vertical = "CENTER", shadow = true,
@@ -52,7 +61,7 @@ local function BuildStyle(theme)
 		align = "CENTER", anchor = "CENTER", vertical = "CENTER", shadow = false, flags = "OUTLINE",
 	}
 	theme.options = {
-		showName = true, showLevel = false,
+		showName = true, showLevel = true,
 		showSpecialText = true, showSpecialText2 = true, showSpecialArt = true,
 		useCustomHealthbarColor = true, forceAlpha = true,
 	}
@@ -64,7 +73,13 @@ local function CreateTargetWidget(frame)
 	icon:SetWidth(128)
 	icon:SetHeight(32)
 	icon:Hide()
-	icon.SetTarget = function(self, value) if value then icon:Show() else icon:Hide() end end
+	icon.SetTarget = function(self, value)
+		if not value then icon:Hide(); return end
+		-- Size and Style tab: optional color for the selection box
+		local c = SHPlates.TOpt("targetColorOn") and SHPlates.TOpt("targetColor")
+		if c then icon:SetVertexColor(c.r, c.g, c.b) else icon:SetVertexColor(1, 1, 1) end
+		icon:Show()
+	end
 	return icon
 end
 
@@ -236,6 +251,7 @@ local function CreateNeon(mode)
 
 	theme.SetSpecialText = Shared.SpellTextDelegate
 	theme.SetSpecialText2 = HealthTextDelegate
+	theme.healthTextKey = "specialText2"  -- which text shows health (Size and Style tab)
 	theme.SetScale = Scale
 	theme.SetAlpha = Shared.MakeAlpha(LocalVars)
 	theme.OnUpdate = OnUpdateDelegate
@@ -280,8 +296,7 @@ local function CreateNeon(mode)
 	table.insert(s, { type = "check", key = "WidgetCombo", label = "Combo Points" })
 	table.insert(s, { type = "check", key = "WidgetRange", label = "Range Watcher" })
 	table.insert(s, { type = "choice", key = "RangeMode", label = "Range", choices = Shared.RangeModes })
-	table.insert(s, { type = "check", key = "WidgetMobNote", label = "Mob Notes (edit on the General page)" })
-	table.insert(s, { type = "check", key = "WidgetDebuff", label = "Debuff Tracker" })
+	table.insert(s, { type = "check", key = "WidgetMobNote", label = "Mob Notes (edit on the Notes tab)" })
 	table.insert(s, { type = "choice", key = "WidgetDebuffMode", label = "Debuff Mode", choices = Shared.DebuffModes })
 	table.insert(s, { type = "list", key = "WidgetDebuffList", label = "Debuff filter list (one per line)" })
 	table.insert(s, { type = "list", key = "HideNames", label = "Always hide these units (one name per line)" })

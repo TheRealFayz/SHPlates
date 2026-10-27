@@ -80,6 +80,7 @@ end
 ----------------------
 do
 	local function UpdateAuraFrame(frame, expiration)
+		if frame.hideTimers then frame.TimeLeft:SetText(""); return end
 		local timeleft = expiration - GetTime()
 		local green, yellow, red = "|cFF84FF00", "|cFFFFB400", "|cFFFF0000"
 		local textcolor
@@ -132,6 +133,9 @@ do
 	end
 
 	local aura = {}
+	local PREVIEW_ICONS = { "Interface\\Icons\\Spell_Shadow_AbominationExplosion",
+		"Interface\\Icons\\Spell_Shadow_CurseOfSargeras", "Interface\\Icons\\Spell_Shadow_ShadowWordPain" }
+	local list = {}   -- reused every scan
 
 	local function HideAll(frame)
 		for index = 1, MAX_ICONS do PolledHideIn(frame.AuraFrames[index], -1) end
@@ -139,6 +143,23 @@ do
 
 	local function UpdateAuraWidget(frame, unit)
 		local AuraFrames = frame.AuraFrames
+		-- debuff icon size (Size and Style tab)
+		local size = SHPlates.TOpt("debuffScale") or 1
+		if frame._size ~= size then frame._size = size; frame:SetScale(size) end
+		-- timers tick outside the plate update, so each icon remembers the setting
+		local hideTimers = SHPlates.TOpt("hideDebuffTimers") and true or false
+		for i = 1, MAX_ICONS do AuraFrames[i].hideTimers = hideTimers end
+		if unit.isPreview then
+			-- the designer's sample plate: three made-up debuffs to place
+			for i = 1, 3 do
+				local f = AuraFrames[i]
+				f.Icon:SetTexture(PREVIEW_ICONS[i])
+				f.Stacks:SetText("")
+				f:PolledHideIn(GetTime() + 20 * i)
+			end
+			for i = 4, MAX_ICONS do PolledHideIn(AuraFrames[i], -1) end
+			return
+		end
 		local unitid = unit.guid
 		-- without SuperWoW only the target / mouseover can be read; with it, a
 		-- plate whose GUID isn't confirmed yet shows nothing rather than guess
@@ -157,7 +178,11 @@ do
 		frame.lastScan = now
 		if ext then ext.auraDirty = nil end
 
-		local auraCount = 0
+		-- Gather every debuff that passes the filter, then show yours first:
+		-- with 6 slots, other players' debuffs could push yours off the plate.
+		-- Order: yours, then unknown caster, then other people's. Within each
+		-- group the game's own order is kept, so icons don't jump around.
+		local found = 0
 		for index = 1, 16 do
 			local icon, count, dispelType, spellId = UnitDebuff(unitid, index)
 			if not icon then break end
@@ -174,14 +199,33 @@ do
 			else aura.isMine = nil end
 
 			if frame.Filter(aura) then
-				auraCount = auraCount + 1
-				local AuraFrame = AuraFrames[auraCount]
-				AuraFrame.Icon:SetTexture(icon)
-				if (count or 0) > 1 then AuraFrame.Stacks:SetText(count)
-				else AuraFrame.Stacks:SetText("") end
-				AuraFrame:PolledHideIn(expires or 0)
-				if auraCount >= MAX_ICONS then break end
+				found = found + 1
+				local entry = list[found]
+				if not entry then entry = {}; list[found] = entry end
+				entry.icon, entry.count, entry.expires, entry.index = icon, count or 0, expires, index
+				if aura.isMine then entry.rank = 1 elseif aura.isMine == nil then entry.rank = 2 else entry.rank = 3 end
 			end
+		end
+		for i = found + 1, table.getn(list) do list[i].rank = nil end
+		-- stable sort (insertion): small list, no table.sort surprises
+		for i = 2, found do
+			local e = list[i]
+			local j = i - 1
+			while j >= 1 and (list[j].rank > e.rank or (list[j].rank == e.rank and list[j].index > e.index)) do
+				list[j + 1] = list[j]; j = j - 1
+			end
+			list[j + 1] = e
+		end
+		local auraCount = 0
+		for i = 1, found do
+			if auraCount >= MAX_ICONS then break end
+			local e = list[i]
+			auraCount = auraCount + 1
+			local AuraFrame = AuraFrames[auraCount]
+			AuraFrame.Icon:SetTexture(e.icon)
+			if e.count > 1 then AuraFrame.Stacks:SetText(e.count)
+			else AuraFrame.Stacks:SetText("") end
+			AuraFrame:PolledHideIn(e.expires or 0)
 		end
 		for index = auraCount + 1, MAX_ICONS do PolledHideIn(AuraFrames[index], -1) end
 	end

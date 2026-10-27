@@ -94,7 +94,7 @@ do
 	end
 
 	local function UpdateNoteWidget(self, unit)
-		local text = GetNote(unit.name)
+		local text = unit.previewNote or GetNote(unit.name)
 		if text then
 			self.Text:SetText("|cFFFFC600" .. text)
 			self:Show()

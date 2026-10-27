@@ -214,10 +214,28 @@ local function Apply(payload)
 	local count = 0
 	-- general settings: only known keys with the right type
 	if type(payload.settings) == "table" then
+		-- strings made before the "Show" boxes became "Hide" boxes
+		local old = payload.settings
+		if type(old.showFriendly) == "boolean" and old.hideFriendly == nil then old.hideFriendly = old.showFriendly end
+		if type(old.showCritters) == "boolean" and old.hideCritters == nil then old.hideCritters = not old.showCritters end
 		for key, value in pairs(payload.settings) do
 			if D[key] ~= nil and key ~= "specs" and key ~= "themevars" and type(value) == type(D[key])
 				and (key ~= "theme" or ValidTheme(value)) then
 				DB[key] = CopyValue(value)
+				count = count + 1
+			end
+		end
+	end
+	-- strings made before every template had its own settings: those settings
+	-- were shared, so they go to every template (newer strings carry them in
+	-- themevars below, which then win)
+	if type(payload.settings) == "table" and SHPlates.TEMPLATE_DEFAULTS then
+		for key, value in pairs(payload.settings) do
+			local def = SHPlates.TEMPLATE_DEFAULTS[key]
+			if def ~= nil and type(value) == type(def) then
+				for _, theme in pairs(SHPlatesThemeList) do
+					if type(theme) == "table" and type(theme.vars) == "table" then theme.vars[key] = CopyValue(value) end
+				end
 				count = count + 1
 			end
 		end
@@ -271,9 +289,8 @@ local function Apply(payload)
 		end
 	end
 	-- switch everything over now, no reload needed
-	SHPlates:UseAutoHide(DB.autohide)
-	SHPlates:SetOverlap(DB.overlap)
 	if DB.hidePfUIPlates and SHPlates.Conflicts then SHPlates.Conflicts.KillPfUIPlates() end
+	if DB.hideShaguPlates and SHPlates.Conflicts then SHPlates.Conflicts.KillShaguPlates() end
 	SHPlates.ApplySettings(true)
 	if SHPlates.RefreshAllConfigPages then SHPlates.RefreshAllConfigPages() end
 	return count, learned, sameClass
@@ -326,7 +343,7 @@ function Share.BuildPage(page)
 	scroll:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -28, 8)
 
 	local edit = CreateFrame("EditBox", "SHPlatesShareEdit", scroll)
-	edit:SetWidth(340); edit:SetHeight(250)
+	edit:SetWidth(300); edit:SetHeight(250)
 	edit:SetMultiLine(true)
 	edit:SetAutoFocus(false)
 	edit:SetMaxLetters(0)

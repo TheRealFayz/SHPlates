@@ -8,6 +8,12 @@ local Data = SHPlates.Data
 local ART = SHPlates.ART
 local threatfont = "Fonts\\ARIALN.TTF"
 
+-- size of the aggro holder's name (each template sets its own)
+local function HolderFont(text, flags)
+	local size = SHPlates.TOpt("holderFontSize") or 8
+	if text._size ~= size then text._size = size; text:SetFont(threatfont, size, flags) end
+end
+
 local function GetRelativeThreat(unit) return Data.GetRelativeThreat(unit) end
 local IsRaidTank = Data.IsRaidTank
 
@@ -43,9 +49,12 @@ do
 	}
 
 	local function UpdateThreatWheelWidget(frame, unit)
-		if unit.reaction == "FRIENDLY" or (not C.InCombat()) then frame:Hide(); return end
+		if not unit.isPreview and (unit.reaction == "FRIENDLY" or (not C.InCombat())) then frame:Hide(); return end
 		if unit.isTarget or unit.isMouseover then
 			local threat, holder, estimated = GetRelativeThreat(unit)
+			-- the Designer's sample plate: you hold aggro
+			if unit.isPreview then threat, holder, estimated = 75, UnitName("player"), false end
+			HolderFont(frame.TargetText, "")
 			local segment = GetThreatSegment(threat)
 			if segment then
 				frame.ThreatIcon:SetTexCoord(unpack(SEGMENT[segment]))
@@ -99,10 +108,13 @@ do
 	local art = ART .. "ThreatLine\\ThreatLineUnified"
 
 	local function UpdateThreatLineWidget(frame, unit)
-		if unit.reaction == "FRIENDLY" or (not C.InCombat()) or (not InGroupOrPet()) then frame:Hide(); return end
+		if not unit.isPreview and (unit.reaction == "FRIENDLY" or (not C.InCombat()) or (not InGroupOrPet())) then frame:Hide(); return end
 
 		if unit.isTarget or unit.isMouseover then
 			local threat, holder = GetRelativeThreat(unit)
+			-- the Designer's sample plate: you hold aggro
+			if unit.isPreview then threat, holder = 75, UnitName("player") end
+			HolderFont(frame.TargetText, "OUTLINE")
 			if not threat or threat <= 0 then frame:Hide(); return end
 			local middledot, outerdot = "Left", "Right"
 			local lineAnchor, dotAnchor, lineWidth = "RIGHT", "LEFT", 0
@@ -118,7 +130,7 @@ do
 				middledot, outerdot = "Right", "Left"
 			end
 			if holder then
-				if (IsPlayerTank() or (not IsPlayerInRaid())) and frame._ShowTargetOf then
+				if (IsPlayerTank() or (not IsPlayerInRaid()) or unit.isPreview) and frame._ShowTargetOf then
 					frame.TargetText:SetText(holder)
 				else frame.TargetText:SetText("") end
 				if IsRaidTank(holder) then
@@ -127,6 +139,36 @@ do
 				else frame.TargetText:SetTextColor(1, 1, 1, 1) end
 			else frame.TargetText:SetText("") end
 			if lineWidth < 1 then lineWidth = 1 end
+			if unit.isPreview then
+				-- the Designer's sample: the whole line, low side left, high side
+				-- right in yellow, so it can be lined up with the bar
+				local low, high = frame._LowColor, { r = 1, g = .85, b = 0 }
+				frame.Line:ClearAllPoints()
+				frame.Line:SetPoint("RIGHT", frame.Middle, "CENTER", 0, 0)
+				frame.Line:SetWidth(50)
+				frame.Line:SetVertexColor(low.r, low.g, low.b)
+				frame.Dot:ClearAllPoints()
+				frame.Dot:SetPoint("CENTER", frame.Line, "LEFT", 0, 0)
+				frame.Dot:SetTexCoord(unpack(TEX.Left))
+				frame.Dot:SetVertexColor(low.r, low.g, low.b)
+				frame.Line2:ClearAllPoints()
+				frame.Line2:SetPoint("LEFT", frame.Middle, "CENTER", 0, 0)
+				frame.Line2:SetWidth(50)
+				frame.Line2:SetVertexColor(high.r, high.g, high.b)
+				frame.Line2:Show()
+				frame.Dot2:ClearAllPoints()
+				frame.Dot2:SetPoint("CENTER", frame.Line2, "RIGHT", 0, 0)
+				frame.Dot2:SetTexCoord(unpack(TEX.Right))
+				frame.Dot2:SetVertexColor(high.r, high.g, high.b)
+				frame.Dot2:Show()
+				frame.Middle:SetTexCoord(unpack(TEX.Right))
+				frame.Middle:SetVertexColor(low.r, low.g, low.b)
+				frame:Show()
+				frame.FadeTime = GetTime() + 2
+				frame:HideIn(frame.FadeTime)
+				return
+			end
+			frame.Line2:Hide(); frame.Dot2:Hide()
 			frame.Line:ClearAllPoints()
 			frame.Line:SetPoint(lineAnchor, frame.Middle, "CENTER", 0, 0)
 			frame.Line:SetWidth(lineWidth)
@@ -169,6 +211,18 @@ do
 		frame.Line:SetTexCoord(unpack(TEX["Line"]))
 		frame.Line:SetWidth(32)
 		frame.Line:SetHeight(32)
+		-- second half of the line, only used by the Designer's sample to show
+		-- the whole line at once (both sides) so it can be centered
+		frame.Line2 = frame:CreateTexture(nil, "OVERLAY")
+		frame.Line2:SetTexture(art)
+		frame.Line2:SetTexCoord(unpack(TEX["Line"]))
+		frame.Line2:SetHeight(32)
+		frame.Line2:Hide()
+		frame.Dot2 = frame:CreateTexture(nil, "OVERLAY")
+		frame.Dot2:SetTexture(art)
+		frame.Dot2:SetWidth(32)
+		frame.Dot2:SetHeight(32)
+		frame.Dot2:Hide()
 		frame.TargetText = frame:CreateFontString(nil, "OVERLAY")
 		frame.TargetText:SetFont(threatfont, 8, "OUTLINE")
 		-- fixed above the left part of the line (Tidy Plates tied it to the moving
@@ -207,15 +261,38 @@ do
 			if not p or self._frameLift == lift then return end
 			self._frameLift = lift
 			self:ClearAllPoints()
-			self:SetPoint(p[1], p[2], p[3], p[4], p[5] + lift)
+			-- plus the Designer offset (SetDesignOffset)
+			self:SetPoint(p[1], p[2], p[3], p[4] + (self._dx or 0), p[5] + lift + (self._dy or 0))
+		end
+		frame.SetDesignOffset = function(self, x, y)
+			if self._dx == x and self._dy == y then return end
+			self._dx, self._dy = x, y
+			local lift = self._frameLift or 0
+			self._frameLift = nil
+			self:SetLift(lift)
+			-- the name is its own piece: keep it where it was
+			self._lift = nil
+			self:SetTextLift(self._textLift or 0)
+		end
+		-- Designer offset for the aggro holder's name, separate from the line
+		frame.SetTextDesignOffset = function(self, x, y)
+			if self._tdx == x and self._tdy == y then return end
+			self._tdx, self._tdy = x, y
+			self._lift = nil
+			self:SetTextLift(self._textLift or 0)
 		end
 		frame.SetTextLift = function(self, lift)
 			lift = lift or 0
+			self._textLift = lift
 			if self._lift == lift then return end
 			self._lift = lift
 			local p = self._textPoint
+			-- Designer offsets: the name's own, minus the line's when the name
+			-- hangs off the line, so moving the line doesn't drag the name along
+			local x, y = self._tdx or 0, self._tdy or 0
+			if p[2] == self then x, y = x - (self._dx or 0), y - (self._dy or 0) end
 			self.TargetText:ClearAllPoints()
-			self.TargetText:SetPoint(p[1], p[2], p[3], p[4], p[5] + lift)
+			self.TargetText:SetPoint(p[1], p[2], p[3], p[4] + x, p[5] + lift + y)
 		end
 		frame._LowColor = { r = .14, g = .75, b = 1 }
 		frame._TankedColor = { r = 0, g = .9, b = .1 }
@@ -232,9 +309,10 @@ do
 	local artpath = ART .. "MainTanked\\"
 
 	local function UpdateTankedWidget(frame, unit)
-		if unit.reaction == "FRIENDLY" or (not C.InCombat()) then frame:Hide(); return end
+		if not unit.isPreview and (unit.reaction == "FRIENDLY" or (not C.InCombat())) then frame:Hide(); return end
 		if unit.isTarget or unit.isMouseover then
 			local holder = Data.GetAggroHolder(unit)
+			if unit.isPreview then holder = UnitName("player") end
 			if holder then
 				frame.FadeTime = GetTime() + 2
 				frame:HideIn(frame.FadeTime)

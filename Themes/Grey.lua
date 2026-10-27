@@ -13,7 +13,13 @@ local function CreateTargetbox(frame)
 	icon:SetWidth(128)
 	icon:SetHeight(64)
 	icon:Hide()
-	icon.SetTarget = function(self, value) if value then icon:Show() else icon:Hide() end end
+	icon.SetTarget = function(self, value)
+		if not value then icon:Hide(); return end
+		-- Size and Style tab: optional color for the selection box
+		local c = SHPlates.TOpt("targetColorOn") and SHPlates.TOpt("targetColor")
+		if c then icon:SetVertexColor(c.r, c.g, c.b) else icon:SetVertexColor(1, 1, 1) end
+		icon:Show()
+	end
 	return icon
 end
 
@@ -38,7 +44,6 @@ local function CreateGrey(mode)
 		WidgetClassIcon = false,
 		WidgetMobNote = false,
 		HealthText = 1,
-		LevelText = false,
 		AggroHealth = false,
 		AggroBorder = true,
 		HideNames = {},
@@ -64,22 +69,27 @@ local function CreateGrey(mode)
 
 	-- Style (uses the default boxy art)
 	theme.hitbox = { width = 140, height = 35, }
+	-- the elite star is its own piece (movable in the Designer), so elites
+	-- use the plain border with the star drawn on top in the same spot
+	theme.healthborder = { elitetexture = SHPlates.MEDIA .. "RegularBorder" }
+	theme.eliteicon = { texture = greyart .. "EliteStar", width = 16, height = 16, x = -51, y = 16, anchor = "CENTER" }
 	theme.name = { width = 100, }
 	-- raid marker: right end of the bar, mirroring the elite star on the left
 	theme.raidicon = { width = 14, height = 14, x = 50, y = 16, anchor = "CENTER", }
-	theme.options = { showLevel = false, showSpecialText = true, showSpecialText2 = true, showAggroGlow = true, }
+	theme.options = { showLevel = true, showSpecialText = true, showSpecialText2 = true, showAggroGlow = true, }
 	theme.threatcolor = {
 		LOW = { r = .6, g = 1, b = 0, a = 1, },
 		MEDIUM = { r = .6, g = 1, b = 0, a = 1, },
 		HIGH = { r = 1, g = 0, b = 0, a = 1, },
 	}
 
-	-- The border glow and "Unit Level" options drive the style, so the
-	-- style is refreshed from the variables whenever the theme loads.
+	-- The border glow option and the global "Hide unit levels" setting drive
+	-- the style, so the style is refreshed whenever the theme loads.
 	theme.OnApplyVars = function(t)
 		t.options.showAggroGlow = LocalVars.AggroBorder and true or false
-		t.options.showLevel = LocalVars.LevelText and true or false
-		if LocalVars.LevelText then t.name.width = 88 else t.name.width = 100 end
+		t.options.showLevel = true
+		-- the name gives up room on the right only while the level is there
+		if LocalVars.hideLevel then t.name.width = 100 else t.name.width = 88 end
 		-- name/level stay exactly where Tidy Plates put them
 		t.name.y = 1
 		t.level.y = 1
@@ -205,6 +215,7 @@ local function CreateGrey(mode)
 	end
 
 	theme.SetSpecialText = HealthTextDelegate
+	theme.healthTextKey = "specialText"  -- which text shows health (Size and Style tab)
 	theme.SetSpecialText2 = Shared.SpellTextDelegate
 	theme.SetScale = Scale
 	theme.SetAlpha = Shared.MakeAlpha(LocalVars)
@@ -235,9 +246,7 @@ local function CreateGrey(mode)
 		table.insert(s, { type = "check", key = "WidgetCombo", label = "Combo Points" })
 	end
 	table.insert(s, { type = "check", key = "WidgetClassIcon", label = "Enemy Class Icon" })
-	table.insert(s, { type = "check", key = "WidgetMobNote", label = "Mob Notes (edit on the General page)" })
-	table.insert(s, { type = "check", key = "LevelText", label = "Unit Level" })
-	table.insert(s, { type = "check", key = "WidgetDebuff", label = "Short Debuffs" })
+	table.insert(s, { type = "check", key = "WidgetMobNote", label = "Mob Notes (edit on the Notes tab)" })
 	table.insert(s, { type = "choice", key = "WidgetDebuffMode", label = "Debuff Mode", choices = Shared.DebuffModes })
 	table.insert(s, { type = "list", key = "WidgetDebuffList", label = "Debuff filter list (one per line)" })
 	table.insert(s, { type = "header", text = "Threat Indication" })

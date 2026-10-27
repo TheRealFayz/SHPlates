@@ -60,6 +60,8 @@ end
 -- match the name on the plate, it's stale: ignore it until it catches up.
 function C.PlateGUID(plate, plateName)
 	if not C.HasSuperWoW then return nil end
+	-- the designer's sample plate isn't a real one: SuperWoW has no unit for it
+	if plate.shpPreview then return nil end
 	local guid = plate:GetName(1)
 	if not guid or guid == "" or guid == "0x0000000000000000" then return nil end
 	if plateName then

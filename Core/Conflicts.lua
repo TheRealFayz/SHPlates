@@ -66,6 +66,69 @@ function Cf.KillPfUIPlates()
 	return true
 end
 
+-------------------------------------------------------------------------------
+-- ShaguTweaks: its nameplate tweaks (class colors, scale, castbar, dark UI)
+-- all run through one shared scanner, ShaguTweaks.libnameplate. Stopping that
+-- scanner and emptying its callback lists switches every one of them off for
+-- the session, the same way GudaPlates does it. Nothing is saved to
+-- ShaguTweaks' settings.
+-------------------------------------------------------------------------------
+local function ShaguEnabled()
+	return not (SHPlatesDB and SHPlatesDB.hideShaguPlates == false)
+end
+
+-- "Nameplate Scale" moves the plate's health bar and text into a frame of
+-- its own (plate.new), and "Nameplate Castbar" adds plate.castbar. Put the
+-- plate back the way the client built it so SHPlates can read it.
+function Cf.ReleaseShaguPlate(plate)
+	if not plate or plate.shplatesShaguReleased or not ShaguEnabled() then return end
+	if not (ShaguTweaks and ShaguTweaks.libnameplate) then return end
+	plate.shplatesShaguReleased = true
+	local new = plate.new
+	if new and new.plate == plate then
+		if plate.healthbar and plate.healthbar.SetParent then plate.healthbar:SetParent(plate) end
+		local regions = { new:GetRegions() }
+		for i = 1, table.getn(regions) do regions[i]:SetParent(plate) end
+		new:SetScript("OnShow", nil)
+		new:Hide()
+	end
+	local cb = plate.castbar
+	if cb and cb.texture and cb.texture.icon then
+		cb:Hide()
+		cb.Show = Noop
+	end
+end
+
+local shaguAnnounced = false
+function Cf.KillShaguPlates()
+	if not ShaguEnabled() then return true end
+	local lib = ShaguTweaks and ShaguTweaks.libnameplate
+	if not lib then return false end
+	if lib.shplatesKilled then return true end
+	lib.shplatesKilled = true
+	lib:SetScript("OnUpdate", nil)
+	-- plates it already hooked call these lists every frame: empty them
+	if lib.OnInit then C.wipe(lib.OnInit) end
+	if lib.OnShow then C.wipe(lib.OnShow) end
+	if lib.OnUpdate then C.wipe(lib.OnUpdate) end
+	local children = { WorldFrame:GetChildren() }
+	for i = 1, table.getn(children) do Cf.ReleaseShaguPlate(children[i]) end
+	if not shaguAnnounced then
+		shaguAnnounced = true
+		C.print("ShaguTweaks' nameplate tweaks are switched off while SHPlates is running.")
+	end
+	return true
+end
+
+local shaguWatch = CreateFrame("Frame")
+shaguWatch:RegisterEvent("ADDON_LOADED")
+shaguWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+shaguWatch:SetScript("OnEvent", function()
+	if SHPlates.disabled then return end
+	if event == "ADDON_LOADED" and arg1 ~= SHPlates.ADDON and arg1 ~= "ShaguTweaks" then return end
+	Cf.KillShaguPlates()
+end)
+
 -- pfUI creates its nameplate module when pfUI loads, which can be before or
 -- after SHPlates. Keep looking until it exists (or clearly never will).
 local watcher = CreateFrame("Frame")

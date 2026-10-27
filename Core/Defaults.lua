@@ -113,6 +113,22 @@ theme.dangerskull = {
 	anchor = "CENTER",
 }
 
+-- Backing behind the spell icon (themes whose cast bar art had a frame for
+-- the icon set a texture, so the frame moves and hides with the icon)
+theme.spellbacking = {
+	width = 32, height = 32,
+	x = 0, y = 0,
+	anchor = "CENTER",
+}
+
+-- Separate elite star (themes that cut it out of their border art set a
+-- texture; without one the star stays part of the elite border)
+theme.eliteicon = {
+	width = 16, height = 16,
+	x = -51, y = 16,
+	anchor = "CENTER",
+}
+
 theme.frame = {
 	width = 101, height = 45,
 	x = 0, y = 0 + nameplate_verticalOffset,

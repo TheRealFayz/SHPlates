@@ -35,6 +35,7 @@ Shared.DebuffModes = { "All of mine", "Mine, filtered by list", "Everyone's" }
 
 -- Spell text: works on every plate thanks to UNIT_CASTEVENT
 function Shared.SpellTextDelegate(unit)
+	if SHPlates.TOpt("hideCastbars") then return "" end
 	if unit.isCasting and unit.spellName then return unit.spellName end
 	return ""
 end

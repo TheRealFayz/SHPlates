@@ -10,6 +10,9 @@ Core\Statusbar.lua
 Core\Utility.lua
 Core\Data.lua
 Core\Interrupts.lua
+Core\CastTimes.lua
+Core\CastLog.lua
+Core\Critters.lua
 Core\SpellDurations.lua
 Core\Marks.lua
 Core\Defaults.lua

@@ -27,6 +27,7 @@ local CreateStatusbar = SHPlates.CreateStatusbar
 -- I. Variables and Simple Functions
 -------------------------------------------------------------------------------
 local activetheme = {}
+local realtheme = {}   -- the theme in use; activetheme can briefly be the designer sample's
 local numChildren = -1
 local echoUpdateList = {}
 local echoSelf = {}
@@ -92,7 +93,17 @@ local overlapMode = false   -- "Allow overlapping nameplates"
 -- Vanilla stacks plates using the size of the Blizzard frame. For overlap,
 -- that frame shrinks to 1x1 and stops taking the mouse; our own click frame
 -- (extended.clicker) takes over and forwards clicks to it.
-local function Opt(key) return SHPlatesDB and SHPlatesDB[key] end
+-- Settings live in each template's vars (Grey/Tank, Neon/DPS...): the one
+-- being drawn right now first, then the template defaults, then the global
+-- settings (pfUI switch, learned casts and so on)
+local function Opt(key)
+	local vars = activetheme and activetheme.vars
+	local v = vars and vars[key]
+	if v == nil and SHPlates.TEMPLATE_DEFAULTS then v = SHPlates.TEMPLATE_DEFAULTS[key] end
+	if v == nil and SHPlatesDB then v = SHPlatesDB[key] end
+	return v
+end
+SHPlates.TOpt = Opt
 
 local CLASS_COLORS = {
 	WARRIOR = { .78, .61, .43 }, MAGE = { .41, .80, .94 }, ROGUE = { 1, .96, .41 },
@@ -120,7 +131,7 @@ SHPlates.IsAngryNeutral = IsAngryNeutral
 local function IsFilteredOut(u)
 	if u.isTarget then return false end
 	if Opt("hideFriendly") and u.reaction == "FRIENDLY" then return true end
-	if Opt("showCritters") == false and u.isCritter then return true end
+	if Opt("hideCritters") and u.isCritter then return true end
 	return false
 end
 
@@ -164,6 +175,20 @@ SHPlates.VisibleNameplates = PlatesVisible
 SHPlates.AllNameplates = Plates
 
 local function IsPlateShown(plate) if plate:IsShown() then return true end end
+
+-- A unit's cast: by GUID with SuperWoW, by name from the combat log without
+local previewCast = { spell = "Shadow Bolt", icon = "Interface\\Icons\\Spell_Shadow_ShadowBolt" }
+local function GetUnitCast(u)
+	if u.isPreview then
+		local now = GetTime()
+		if not previewCast.finish or now >= previewCast.finish - .1 then
+			previewCast.start = now; previewCast.finish = now + 3
+		end
+		return previewCast
+	end
+	if u.guid then return Data.GetCast(u.guid) end
+	return SHPlates.CastLog and SHPlates.CastLog.Get(u.name)
+end
 local function SetSelfEcho(plate, func) if func then echoSelf[plate] = func end end
 local function SetEchoUpdate(func) if func then echoUpdateList[func] = true end end
 
@@ -230,49 +255,206 @@ end
 -------------------------------------------------------------------------------
 local UpdateStyle
 do
-	local objectstyle, objectname
 	local fontgroup = { "name", "level", "specialText", "specialText2" }
-	local anchorgroup = { "healthborder", "threatborder", "castborder", "castnostop",
-		"name", "specialText", "specialText2", "level",
-		"specialArt", "spellicon", "raidicon", "dangerskull" }
 	local bargroup = { "castbar", "healthbar" }
-	local nfont, nanchor, nbar = 4, 12, 2
+
+	-- Size and Style tab: every piece is placed by the theme's numbers, then
+	-- stretched around the health bar's center, so borders and bars stay lined
+	-- up. Text and icons keep their size and only move with the bar.
+	--   bar   : health border, threat border, health bar  (size * width/height)
+	--   cast  : cast bar and its borders  (width also follows the plate)
+	--   icon / text : position only (text boxes get wider with the bar)
+	local KIND = {
+		healthborder = "bar", threatborder = "bar", healthbar = "bar",
+		castborder = "cast", castnostop = "cast", castbar = "cast", spellicon = "spell", spellbacking = "spell",
+		name = "text", level = "text", specialText = "text", specialText2 = "text",
+		specialArt = "icon", raidicon = "icon", dangerskull = "icon", eliteicon = "icon",
+	}
+	local LAYOUT_ORDER = { "healthborder", "threatborder", "castborder", "castnostop",
+		"name", "specialText", "specialText2", "level",
+		"specialArt", "spellbacking", "spellicon", "raidicon", "dangerskull", "eliteicon", "castbar", "healthbar" }
+	local AX = { LEFT = -1, RIGHT = 1, TOPLEFT = -1, BOTTOMLEFT = -1, TOPRIGHT = 1, BOTTOMRIGHT = 1 }
+	local AY = { TOP = 1, BOTTOM = -1, TOPLEFT = 1, TOPRIGHT = 1, BOTTOMLEFT = -1, BOTTOMRIGHT = -1 }
+	local ALIGN = { "LEFT", "CENTER", "RIGHT" }
+
+	-- current stretch factors (one table: Lua 5.0 allows only 32 upvalues)
+	local F = { ids = {} }
+
+	-- point of an element relative to the frame's center, before stretching
+	local function Point(s)
+		local a = s.anchor or "CENTER"
+		return (AX[a] or 0) * F.fw / 2 + (s.x or 0), (AY[a] or 0) * F.fh / 2 + (s.y or 0)
+	end
+
+	-- Designer tab: which saved offset moves which piece
+	local function Offset(key)
+		local off = F.off
+		if not off then return 0, 0 end
+		local id = F.ids[key]
+		local o = id and off[id]
+		local x, y = o and o.x or 0, o and o.y or 0
+		if (key == "spellicon" or key == "spellbacking") and off.spellicon then x, y = x + off.spellicon.x, y + off.spellicon.y end
+		return x, y
+	end
+
+	local function Place(object, s, anchorTo, kind, key)
+		local a = s.anchor or "CENTER"
+		local px, py = Point(s)
+		px = px * F.hw
+		py = F.cy + (py - F.cy) * F.hh
+		local w, h = s.width, s.height
+		if kind == "bar" then
+			if w then w = w * F.hw end
+			if h then h = h * F.hh end
+		elseif kind == "cast" then
+			if w then w = w * F.hw * F.cw end
+			if h then h = h * F.ch end
+		elseif kind == "spell" then
+			px = F.castX + (px - F.castX) * F.cw
+			py = F.castY + (py - F.castY) * F.ch
+		elseif kind == "text" then
+			if w then w = w * F.hw end
+		end
+		local dx, dy = Offset(key)
+		SetObjectShape(object, w, h)
+		object:ClearAllPoints()
+		object:SetPoint(a, anchorTo, a, px + dx - (AX[a] or 0) * F.fw * F.hw / 2, py + dy - (AY[a] or 0) * F.fh * F.hh / 2)
+	end
+
+	-- widgets keep the spot their theme gave them, plus the designer offset
+	local WIDGET_IDS = { debuffs = { "AuraIcon", "WidgetDebuff" }, class = { "ClassWidget" }, note = { "NoteWidget" },
+		wheel = { "WidgetWheel" }, tanked = { "WidgetTanked" } }
+	local function OffsetWidgets(widgets)
+		if not widgets then return end
+		-- the threat line moves itself (it lifts over the combo bar), so it
+		-- takes the offset through its own anchor
+		local tug = widgets.WidgetTug
+		if tug and tug.SetDesignOffset then
+			local o = F.off and F.off.tug
+			tug:SetDesignOffset(o and o.x or 0, o and o.y or 0)
+			o = F.off and F.off.holder
+			if tug.SetTextDesignOffset then tug:SetTextDesignOffset(o and o.x or 0, o and o.y or 0) end
+		end
+		for id, keys in pairs(WIDGET_IDS) do
+			for i = 1, table.getn(keys) do
+				local w = widgets[keys[i]]
+				if w and w.GetPoint then
+					if not w._base then
+						local a, rel, ra, x, y = w:GetPoint(1)
+						if a then w._base = { a, rel, ra, x or 0, y or 0 } end
+					end
+					local b = w._base
+					if b then
+						local o = F.off and F.off[id]
+						w:ClearAllPoints()
+						w:SetPoint(b[1], b[2], b[3], b[4] + (o and o.x or 0), b[5] + (o and o.y or 0))
+					end
+				end
+			end
+		end
+	end
 
 	function UpdateStyle()
 		local styleOptions = style.options
+		local objectstyle, objectname
+		local friendly = unit.reaction == "FRIENDLY"
+		F.hw = Opt(friendly and "friendlyWidth" or "barWidth") or 1
+		F.hh = Opt(friendly and "friendlyHeight" or "barHeight") or 1
+		F.cw, F.ch = Opt("castWidth") or 1, Opt("castHeight") or 1
+		-- theme sizes already include the enemy/neutral text size: friendly
+		-- plates swap it for their own
+		local fontOffset = friendly and ((Opt("friendlyFontOffset") or 0) - (Opt("fontSizeOffset") or 0)) or 0
+		F.off = SHPlates.GetLayout(activetheme)
+		local ids, hk = F.ids, activetheme.healthTextKey
+		ids.name, ids.level, ids.dangerskull, ids.raidicon = "name", "level", "level", "raid"
+		ids.eliteicon = "elite"
+		ids.castbar, ids.castborder, ids.castnostop, ids.spellicon = "cast", "cast", "cast", "cast"
+		ids.spellbacking = "cast"
+		ids.specialText, ids.specialText2 = nil, nil
+		if hk then
+			ids[hk] = "health"
+			ids[hk == "specialText" and "specialText2" or "specialText"] = "spell"
+		end
+		F.fw, F.fh = style.frame.width or 101, style.frame.height or 45
+		local _
+		_, F.cy = Point(style.healthborder)
+		F.castX, F.castY = Point(style.castbar)
+		F.castX = F.castX * F.hw
+		F.castY = F.cy + (F.castY - F.cy) * F.hh
+
 		-- Hitbox (vanilla has no combat protection on plates)
 		objectstyle = style.hitbox
-		SetObjectShape(extended.clicker, objectstyle.width, objectstyle.height)
+		SetObjectShape(extended.clicker, objectstyle.width and objectstyle.width * F.hw, objectstyle.height and objectstyle.height * F.hh)
 		if overlapMode then SetObjectShape(nameplate, 1, 1)
 		else extended.stackW = nil; UpdateStackingSize(nameplate) end
 		-- Frame
-		SetAnchorGroupObject(extended, style.frame, nameplate)
-		for i = 1, nanchor do
-			objectname = anchorgroup[i]
-			SetAnchorGroupObject(visual[objectname], style[objectname], extended)
+		objectstyle = style.frame
+		SetObjectShape(extended, F.fw * F.hw, F.fh * F.hh)
+		SetObjectAnchor(extended, objectstyle.anchor, nameplate, objectstyle.x, objectstyle.y)
+		for i = 1, table.getn(LAYOUT_ORDER) do
+			objectname = LAYOUT_ORDER[i]
+			local object = visual[objectname] or bars[objectname]
+			Place(object, style[objectname], extended, KIND[objectname], objectname)
 		end
-		for i = 1, nbar do
+		for i = 1, 2 do
 			objectname = bargroup[i]
-			SetBarGroupObject(bars[objectname], style[objectname], extended)
+			objectstyle = style[objectname]
+			SetObjectBartexture(bars[objectname], objectstyle.texture, objectstyle.orientation)
+			bars[objectname]:UpdateSize()
 		end
 		SetObjectTexture(visual.castborder, style.castborder.texture)
 		SetObjectTexture(visual.castnostop, style.castnostop.texture)
-		for i = 1, nfont do
+		for i = 1, 4 do
 			objectname = fontgroup[i]
-			SetFontGroupObject(visual[objectname], style[objectname])
+			objectstyle = style[objectname]
+			-- the spell name follows the cast bar's own text size
+			local extra = (F.ids[objectname] == "spell") and (Opt("castFontOffset") or 0) or 0
+			SetObjectFont(visual[objectname], objectstyle.typeface, math.max(4, (objectstyle.size or 9) + fontOffset + extra), objectstyle.flags)
+			SetObjectJustify(visual[objectname], objectstyle.align, objectstyle.vertical)
+			SetObjectShadow(visual[objectname], objectstyle.shadow)
 		end
+		-- Health text: position and color
+		local htext = activetheme.healthTextKey and visual[activetheme.healthTextKey]
+		if htext then
+			local align = ALIGN[(Opt("healthTextAlign") or 1) - 1]
+			if align then
+				-- span the bar so left and right line up with its ends
+				htext:SetWidth(style.healthbar.width * F.hw - 6)
+				htext:SetJustifyH(align)
+			end
+			local c = Opt("healthTextColorOn") and Opt("healthTextColor")
+			if c then htext:SetTextColor(c.r, c.g, c.b) else htext:SetTextColor(1, 1, 1) end
+		end
+		local nc = Opt("nameColorOn") and Opt("nameColor")
+		if nc then visual.name:SetTextColor(nc.r, nc.g, nc.b) else visual.name:SetTextColor(1, 1, 1) end
 		-- Mouseover highlight follows the health border
 		visual.highlight:SetTexture(style.healthborder.glowtexture)
 		visual.highlight:ClearAllPoints()
 		visual.highlight:SetAllPoints(visual.healthborder)
+		-- The selection box widget stretches with the bar too
+		local box = extended.widgets and extended.widgets.targetbox
+		if box then
+			box._w = box._w or box:GetWidth()
+			box._h = box._h or box:GetHeight()
+			box:SetWidth(box._w * F.hw); box:SetHeight(box._h * F.hh)
+		end
 		-- Show/Hide
 		if styleOptions.showName then visual.name:Show() else visual.name:Hide() end
 		if styleOptions.showSpecialText then visual.specialText:Show() else visual.specialText:Hide() end
 		if styleOptions.showSpecialText2 then visual.specialText2:Show() else visual.specialText2:Hide() end
 		if styleOptions.showSpecialArt then visual.specialArt:Show() else visual.specialArt:Hide() end
-		if styleOptions.showSpellIcon then visual.spellicon:Show() else visual.spellicon:Hide() end
-		if styleOptions.showLevel and (not unit.isBoss) then visual.level:Show() else visual.level:Hide() end
+		if styleOptions.showSpellIcon and not Opt("hideSpellIcon") then visual.spellicon:Show() else visual.spellicon:Hide() end
+		-- the icon's backing (Neon's glowing square) goes wherever the icon goes
+		local backing = style.spellbacking and style.spellbacking.texture
+		if backing then visual.spellbacking:SetTexture(backing) end
+		if backing and visual.spellicon:IsShown() then visual.spellbacking:Show() else visual.spellbacking:Hide() end
+		-- "Hide unit levels" (Display tab) wins over every theme
+		if styleOptions.showLevel and (not Opt("hideLevel")) and (not unit.isBoss) then visual.level:Show() else visual.level:Hide() end
 		if unit.isBoss and styleOptions.showDangerSkull then visual.dangerskull:Show() else visual.dangerskull:Hide() end
+		local star = style.eliteicon and style.eliteicon.texture
+		if star then visual.eliteicon:SetTexture(star) end
+		if star and unit.isElite then visual.eliteicon:Show() else visual.eliteicon:Hide() end
+		OffsetWidgets(extended.widgets)
 	end
 end
 
@@ -353,9 +535,11 @@ do
 		if unit.isElite then
 			visual.healthborder:SetTexture(style.healthborder.elitetexture)
 			threatborder:SetTexture(style.threatborder.elitetexture)
+			if style.eliteicon and style.eliteicon.texture then visual.eliteicon:Show() end
 		else
 			visual.healthborder:SetTexture(style.healthborder.texture)
 			threatborder:SetTexture(style.threatborder.texture)
+			visual.eliteicon:Hide()
 		end
 	end
 
@@ -425,6 +609,7 @@ do
 	local function UpdateUnitCache() for key, value in pairs(unit) do unitcache[key] = value end end
 
 	function UpdateReferences(plate)
+		activetheme = plate.previewTheme or realtheme
 		unitchanged = false
 		nameplate = plate
 		extended = plate.extended
@@ -644,6 +829,9 @@ do
 			unit.isPvP = UnitIsPVP(guid) and true or false
 			unit.power, unit.powermax = UnitMana(guid), UnitManaMax(guid)
 			unit.powerType = UnitPowerType(guid)
+		elseif SHPlates.Critters then
+			-- no GUID: critters are known by name (learned or the starter list)
+			unit.isCritter = SHPlates.Critters.IsCritterName(unit.name)
 		end
 		if unit.reaction ~= "FRIENDLY" and unit.type == "NPC" and inCombat then
 			unit.aggroHolder = Data.GetAggroHolder(unit)
@@ -664,7 +852,7 @@ do
 	end
 
 	local function GatherData_Cast()
-		local cast = Data.GetCast(unit.guid)
+		local cast = GetUnitCast(unit)
 		if cast then
 			unit.isCasting = true
 			unit.spellName = cast.spell
@@ -692,7 +880,11 @@ do
 	local function CheckNameplateStyle()
 		if activetheme.SetStyle then
 			stylename = activetheme.SetStyle(unit); extended.style = activetheme[stylename]
-		else extended.style = activetheme; stylename = tostring(activetheme) end
+		else
+			extended.style = activetheme
+			-- friendly plates can have their own size (Size and Style tab)
+			stylename = tostring(activetheme) .. (unit.reaction == "FRIENDLY" and "F" or "E")
+		end
 		style = extended.style
 		if extended.stylename ~= stylename or forceStyleUpdate then
 			UpdateStyle()
@@ -702,19 +894,27 @@ do
 
 	local function RefreshCastbar()
 		local castbar = bars.castbar
-		local cast = Data.GetCast(unit.guid)
-		if cast then
+		local cast = GetUnitCast(unit)
+		-- "Hide cast bars" (Display tab) applies to every theme
+		if cast and not Opt("hideCastbars") then
 			local r, g, b, a
-			if activetheme.SetCastbarColor then r, g, b, a = activetheme.SetCastbarColor(unit)
+			local cc = Opt("castColorOn") and Opt("castColor")
+			if cc then r, g, b, a = cc.r, cc.g, cc.b, 1
+			elseif activetheme.SetCastbarColor then r, g, b, a = activetheme.SetCastbarColor(unit)
 			else r, g, b, a = 1, .8, 0, 1 end
 			castbar:SetStatusBarColor(r, g, b, a or 1)
 			castbar.cast = cast
 			castbar:SetMinMaxValues(cast.start, cast.finish)
 			castbar:SetValue(GetTime())
 			visual.spellicon:SetTexture(cast.icon)
-			if unit.notInterruptible and style.options.showNostopSpell then
+			local nostop = unit.notInterruptible and style.options.showNostopSpell
+			if nostop then
 				visual.castnostop:Show(); visual.castborder:Hide()
 			else visual.castnostop:Hide(); visual.castborder:Show() end
+			local sb = style.spellbacking
+			if sb and sb.texture then
+				visual.spellbacking:SetTexture((nostop and sb.nostoptexture) or sb.texture)
+			end
 			castbar:Show()
 		else
 			castbar.cast = nil
@@ -765,6 +965,15 @@ do
 	local function FullGather(plate)
 		GatherData_BasicInfo()
 		GatherData_Target()
+		if nameplate.shpPreview then
+			-- the designer's sample plate: shown as your target, with a class,
+			-- a mob note and debuffs so every piece can be placed
+			unit.isPreview = true
+			unit.isTarget = true
+			unit.class = "MAGE"
+			unit.isElite = true
+			unit.previewNote = "Mob note"
+		end
 		GatherData_Cast()
 		ProcessUnitChanges()
 		RefreshCastbar()
@@ -915,6 +1124,17 @@ function SHPlates.OnCastChanged(guid)
 	if Data.GetCast(guid) then OnStartCast(plate) else OnStopCast(plate) end
 end
 
+-- Combat log casts (no SuperWoW): every plate with that name, no GUID
+function SHPlates.OnCastChangedByName(name)
+	local casting = SHPlates.CastLog.Get(name) and true or false
+	for plate in pairs(PlatesVisible) do
+		local u = plate.extended and plate.extended.unit
+		if u and not u.guid and u.name == name then
+			if casting then OnStartCast(plate) else OnStopCast(plate) end
+		end
+	end
+end
+
 -- Aura notifications: just refresh that plate's widgets soon
 function SHPlates.OnAuraChanged(guid)
 	local plate = GUID[guid]
@@ -933,7 +1153,11 @@ do
 		local cast = castbar.cast
 		if not cast then castbar:Hide(); return end
 		local now = GetTime()
-		if now >= cast.finish then
+		if now >= cast.finish and castbar.plate and castbar.plate.shpPreview then
+			-- the designer's sample plate casts forever
+			cast.start = now; cast.finish = now + 3
+			castbar:SetMinMaxValues(cast.start, cast.finish)
+		elseif now >= cast.finish then
 			castbar.cast = nil
 			castbar:Hide()
 			if castbar.plate then OnStopCast(castbar.plate) end
@@ -969,6 +1193,7 @@ do
 			r.border, r.glow, r.name, r.level, r.levelicon = o.border, o.glow, o.name, o.level, o.levelicon
 			r.raidicon = pf.raidicon
 		else
+			if SHPlates.Conflicts then SHPlates.Conflicts.ReleaseShaguPlate(plate) end
 			b.health = plate:GetChildren()
 			-- Vanilla region order
 			r.border, r.glow, r.name, r.level, r.levelicon, r.raidicon = plate:GetRegions()
@@ -1004,6 +1229,8 @@ do
 		v.highlight:Hide()
 		v.castborder = b.castbar:CreateTexture(nil, "ARTWORK")
 		v.castnostop = b.castbar:CreateTexture(nil, "ARTWORK")
+		v.spellbacking = b.castbar:CreateTexture(nil, "ARTWORK")   -- after the borders, so it draws over them
+		v.spellbacking:Hide()
 		v.spellicon = b.castbar:CreateTexture(nil, "OVERLAY")
 		-- Icons live on their own frame above the bar, so the glowing aggro
 		-- border (same draw layer on the bar) can't cover them
@@ -1013,8 +1240,10 @@ do
 		ext.iconFrame = icons
 		v.dangerskull = icons:CreateTexture(nil, "OVERLAY")
 		v.raidicon = icons:CreateTexture(nil, "OVERLAY")
-		v.eliteicon = b.healthbar:CreateTexture(nil, "OVERLAY")
-		v.name = ext:CreateFontString(nil, "ARTWORK")
+		v.eliteicon = icons:CreateTexture(nil, "OVERLAY")
+		-- OVERLAY like the level: on ARTWORK it shared a layer with the health
+		-- border, and Grey's border could end up drawn over the name
+		v.name = ext:CreateFontString(nil, "OVERLAY")
 
 		-- Click frame used in overlap mode
 		local clicker = CreateFrame("Button", nil, ext)
@@ -1093,9 +1322,11 @@ local function ShouldFastHide(p)
 	local neutral = r > .9 and g > .9 and b < .2
 
 	-- critters
-	if Opt("showCritters") == false then
+	if Opt("hideCritters") then
 		if guid then
 			if CRITTERS[UnitCreatureType(guid) or ""] then return true end
+		elseif SHPlates.Critters and SHPlates.Critters.IsCritterName(name) then
+			return true
 		elseif neutral then
 			local _, hpmax = health:GetMinMaxValues()
 			if ext.regions.level:GetText() == "1" and hpmax and hpmax > 0 and hpmax < 100 then return true end
@@ -1104,7 +1335,7 @@ local function ShouldFastHide(p)
 	if hostile then return false end
 
 	if neutral then
-		local vars = activetheme.vars
+		local vars = realtheme.vars
 		if not (vars and vars.OpacityHideNeutral) then return false end
 		if guid then return not (UnitAffectingCombat(guid) or IsAngryNeutral(guid)) end
 		-- no SuperWoW: the aggro glow means it's fighting
@@ -1124,6 +1355,8 @@ do
 		if frame.extended then return false end
 		-- a plate pfUI already processed (it blanks the border texture)
 		if frame.nameplate and frame.nameplate.original and frame.nameplate.original.healthbar then return true end
+		-- a plate ShaguTweaks rebuilt (its regions moved to frame.new): move them back first
+		if frame.new and frame.new.plate == frame and SHPlates.Conflicts then SHPlates.Conflicts.ReleaseShaguPlate(frame) end
 		local objtype = frame:GetObjectType()
 		if objtype ~= "Button" and objtype ~= "Frame" then return false end
 		local region = frame:GetRegions()
@@ -1155,6 +1388,8 @@ do
 	function OnUpdate()
 		local elapsed = arg1 or 0
 		existMouseover = false
+		-- the Designer's sample may have left its own template active
+		activetheme = realtheme
 
 		-- Mouseover changes (the Blizzard glow region is the source of truth)
 		for p in pairs(PlatesVisible) do
@@ -1303,9 +1538,9 @@ function SHPlates:UseAutoHide(option)
 	if useAutoHide and (not InCombat()) and HideNameplates then HideNameplates() end
 end
 function SHPlates:ActivateTheme(theme)
-	if theme and type(theme) == "table" then activetheme = theme end
+	if theme and type(theme) == "table" then activetheme = theme; realtheme = theme end
 end
-function SHPlates:GetActiveTheme() return activetheme end
+function SHPlates:GetActiveTheme() return realtheme end
 function SHPlates:GetPlateByGUID(guid) return GUID[guid] end
 function SHPlates:SetOverlap(enabled)
 	overlapMode = enabled and true or false
@@ -1320,3 +1555,35 @@ resetFrame:SetScript("OnUpdate", function()
 end)
 
 SHPlates:ActivateTheme(SHPlates.defaultTheme)
+
+-------------------------------------------------------------------------------
+-- Designer support
+-------------------------------------------------------------------------------
+-- Saved piece offsets for a theme mode, e.g. SHPlatesDB.layout["Grey/DPS"]
+function SHPlates.GetLayout(theme, create)
+	local db = SHPlatesDB
+	if not (db and theme and theme.family) then return nil end
+	local key = theme.family .. "/" .. (theme.mode or "")
+	if type(db.layout) ~= "table" then
+		if not create then return nil end
+		db.layout = {}
+	end
+	local t = db.layout[key]
+	if not t and create then t = {}; db.layout[key] = t end
+	return t
+end
+
+-- A fake vanilla plate (built by the designer) that SHPlates styles like any other
+function SHPlates.AdoptPreviewPlate(frame)
+	frame.shpPreview = true
+	if not Plates[frame] then ApplyPlateExtension(frame) end
+end
+
+-- Restyle one plate right away (the designer's sample while dragging)
+function SHPlates.RestylePlate(plate)
+	local ext = plate and plate.extended
+	if not ext then return end
+	wipe(ext.unitcache)
+	ext.stylename = ""
+	SetSelfEcho(plate, OnUpdateNameplate)
+end
