@@ -11,7 +11,7 @@ SHPlates puts threat, cast bars, debuff timers, and combo points right on the na
 1. Download the ZIP from GitHub (Code > Download ZIP) or from OctoWoW's [Gitea](https://octowow.st/git/Fayz/SHPlates)
 2. Extract it and rename the folder (for example `SHPlates-main`) to `SHPlates`
 3. Move it into `Interface\AddOns`, so the path ends in `Interface\AddOns\SHPlates\SHPlates.toc`
-4. Restart WoW, then type `/shp` to open the settings
+4. Restart WoW, then click the minimap button or type `/shp` to open the settings
 
 ## Features
 
@@ -24,7 +24,7 @@ Pick Grey or Neon, then Tank or DPS. That makes four templates (Grey Tank, Grey 
 Your theme and mode are saved per talent build, so swapping specs swaps SHPlates with you.
 
 ### Designer
-A simple WYSIWYG editor you rearrange with the mouse. Drag any piece wherever you like:
+A sample plate you rearrange with the mouse. Drag any piece wherever you like:
 - Name, level, health text, and spell name
 - Cast bar and spell icon
 - Raid icon and elite star
@@ -97,9 +97,9 @@ The Share tab turns your whole setup into one string. Copy it, paste it on anoth
 
 ## Settings and Keybinds
 
-Type `/shp` (or `/shplates`) to open the settings window. The tabs run down the right side:
+Click the minimap button or type `/shp` (or `/shplates`) to open the settings window. Right-click and drag the minimap button to move it. The tabs run down the right side:
 
-- **General** - Theme and mode for this talent build, raid mark keys, and the pfUI and ShaguTweaks switches
+- **General** - Theme and mode for this talent build, raid mark keys, the pfUI and ShaguTweaks switches, and hiding the minimap button
 - **One tab per template** (Grey Tank, Grey DPS, Neon Tank, Neon DPS) - The Designer stays at the top, and every setting for that template scrolls underneath it: stacking, which plates show, levels, cast bars, colors, sizes, fonts, opacity, scale, widgets, threat colors, debuffs, and more. Changes show up on the sample right away.
 - **Casts, Tanks and Notes** - Learned uninterruptible casts, your Other Tanks list, and mob notes
 - **Share** - Export and import your setup

@@ -664,6 +664,108 @@ Config:SetBackdrop({
 Config:SetBackdropColor(0, 0, 0, .9)
 table.insert(UISpecialFrames, "SHPlatesConfig")
 
+-------------------------------------------------------------------------------
+-- Spinning portrait (same as TotemNesia's logo)
+-------------------------------------------------------------------------------
+-- The portrait is two textures: the ring and the image inside it. On the
+-- window the ring turns clockwise nonstop, one turn every RING_TURN seconds.
+-- Each time a turn starts, the image does one quick spin that takes SPIN_TIME
+-- seconds, then rests. Both run off one clock so they never drift apart. The
+-- minimap button's ring stays still and only its image spins, on the same beat.
+-- 1.12 has no texture rotation, so a turn moves the texture coordinates. The
+-- art sits inside the middle 88px of each 128px file, so the turned
+-- coordinates never reach past its edges.
+local RING_TURN = 3      -- seconds for one full turn of the ring
+local SPIN_TIME = 0.6    -- how long the image's spin takes
+local SPIN_K = 0.35355   -- half the diagonal of the visible square, in texture units
+local ringTextures = {}  -- turn nonstop
+local spinTextures = {}  -- spin once at the start of every ring turn
+local ringClock = 0
+local spinResting = false
+
+local function SetSpinAngle(tex, a)
+	local c, s = math.cos(a), math.sin(a)
+	local k = SPIN_K
+	tex:SetTexCoord(
+		0.5 + k * (s - c), 0.5 - k * (s + c),   -- upper left
+		0.5 - k * (c + s), 0.5 + k * (c - s),   -- lower left
+		0.5 + k * (c + s), 0.5 + k * (s - c),   -- upper right
+		0.5 + k * (c - s), 0.5 + k * (s + c))   -- lower right
+end
+
+local spinFrame = CreateFrame("Frame")
+spinFrame:SetScript("OnUpdate", function()
+	ringClock = math.mod(ringClock + (arg1 or 0), RING_TURN)
+	local ringAngle = -2 * math.pi * ringClock / RING_TURN
+	for i = 1, table.getn(ringTextures) do SetSpinAngle(ringTextures[i], ringAngle) end
+	local t = ringClock / SPIN_TIME
+	if t < 1 then
+		-- ease in and out, one full turn clockwise
+		local eased = t * t * (3 - 2 * t)
+		local angle = -2 * math.pi * eased
+		for i = 1, table.getn(spinTextures) do SetSpinAngle(spinTextures[i], angle) end
+		spinResting = false
+	elseif not spinResting then
+		for i = 1, table.getn(spinTextures) do SetSpinAngle(spinTextures[i], 0) end
+		spinResting = true
+	end
+end)
+
+-------------------------------------------------------------------------------
+-- Minimap button: left-click opens the settings, right-click drags it
+-------------------------------------------------------------------------------
+local minimapButton = CreateFrame("Button", "SHPlatesMinimapButton", Minimap)
+minimapButton:SetWidth(31); minimapButton:SetHeight(31)  -- the usual size, so button bars treat it like the rest
+minimapButton:SetFrameStrata("MEDIUM")
+minimapButton:SetFrameLevel(8)
+minimapButton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+-- the portrait has its own ring, so no minimap border; a little smaller than
+-- the button so its ring matches the gold ring on other buttons
+local minimapIcon = minimapButton:CreateTexture(nil, "ARTWORK")
+minimapIcon:SetWidth(28); minimapIcon:SetHeight(28)
+minimapIcon:SetPoint("CENTER", minimapButton, "CENTER", 0, 0)
+minimapIcon:SetTexture(SHPlates.MEDIA .. "Portrait")
+SetSpinAngle(minimapIcon, 0)
+table.insert(spinTextures, minimapIcon)
+-- the ring stays still here (angle 0 keeps the same zoom as the image)
+local minimapRing = minimapButton:CreateTexture(nil, "OVERLAY")
+minimapRing:SetAllPoints(minimapIcon)
+minimapRing:SetTexture(SHPlates.MEDIA .. "PortraitRing")
+SetSpinAngle(minimapRing, 0)
+
+-- Starts lower left (225) so it doesn't land on top of TotemNesia's (180)
+function SHPlates.UpdateMinimapButton()
+	local DB = SHPlatesDB or {}
+	local angle = math.rad(DB.minimapPos or 225)
+	minimapButton:ClearAllPoints()
+	minimapButton:SetPoint("CENTER", Minimap, "CENTER", math.cos(angle) * 80, math.sin(angle) * 80)
+	if DB.minimapHidden then minimapButton:Hide() else minimapButton:Show() end
+end
+
+minimapButton:SetScript("OnEnter", function()
+	GameTooltip:SetOwner(this, "ANCHOR_LEFT")
+	GameTooltip:SetText("SHPlates")
+	GameTooltip:AddLine("Click to open the settings", 1, 1, 1)
+	GameTooltip:AddLine("Right-click and drag to move", .6, .6, .6)
+	GameTooltip:Show()
+end)
+minimapButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+minimapButton:RegisterForClicks("LeftButtonUp")
+-- through /shp, so the GudaPlates warning still shows when SHPlates is off
+minimapButton:SetScript("OnClick", function() SlashCmdList["SHPLATES"]("") end)
+minimapButton:RegisterForDrag("RightButton")
+minimapButton:SetScript("OnDragStart", function()
+	this:SetScript("OnUpdate", function()
+		local mx, my = Minimap:GetCenter()
+		local px, py = GetCursorPosition()
+		local scale = Minimap:GetEffectiveScale()
+		px, py = px / scale, py / scale
+		SHPlatesDB.minimapPos = math.deg(math.atan2(py - my, px - mx))
+		SHPlates.UpdateMinimapButton()
+	end)
+end)
+minimapButton:SetScript("OnDragStop", function() this:SetScript("OnUpdate", nil) end)
+
 -- Round portrait over the top-left corner, like AutoSpam's hourglass
 local portraitFrame = CreateFrame("Frame", nil, Config)
 portraitFrame:SetWidth(72); portraitFrame:SetHeight(72)
@@ -672,6 +774,14 @@ portraitFrame:SetFrameLevel(Config:GetFrameLevel() + 5)
 local portrait = portraitFrame:CreateTexture(nil, "ARTWORK")
 portrait:SetAllPoints(portraitFrame)
 portrait:SetTexture(SHPlates.MEDIA .. "Portrait")
+SetSpinAngle(portrait, 0)
+table.insert(spinTextures, portrait)
+-- the ring draws over the image so their overlap hides the seam
+local portraitRing = portraitFrame:CreateTexture(nil, "OVERLAY")
+portraitRing:SetAllPoints(portraitFrame)
+portraitRing:SetTexture(SHPlates.MEDIA .. "PortraitRing")
+SetSpinAngle(portraitRing, 0)
+table.insert(ringTextures, portraitRing)
 
 -- the header sits a little right of center to balance the portrait
 local title = Config:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
@@ -779,9 +889,11 @@ local function UpdateStatusLine()
 	if not activeThemeName then
 		statusLine:SetText("No theme  |cff888888(build " .. sig .. ")|r")
 		portrait:SetVertexColor(.55, .55, .55)  -- dimmed while plates are plain
+		portraitRing:SetVertexColor(.55, .55, .55)
 		return
 	end
 	portrait:SetVertexColor(1, 1, 1)
+	portraitRing:SetVertexColor(1, 1, 1)
 	local _, _, family = string.find(activeThemeName, "^(.-)/")
 	local mode = activeRole
 	if settings.role ~= "Tank" and settings.role ~= "DPS" then mode = mode .. " (Auto)" end
@@ -932,6 +1044,14 @@ local function BuildGeneralPage(page)
 			else C.print("ShaguTweaks' nameplate tweaks come back after a /reload.") end end,
 		"Stops ShaguTweaks' class colors, scale, castbar and dark border on the game's plates, " ..
 		"which would otherwise fight with SHPlates. Unchecking needs a /reload.")
+	AddControl(page, c); y = y - h
+
+	y = y - 4
+	c, h = CreateHeader(child, "Minimap button", y); y = y - h
+	c, h = CreateCheck(child, "Hide the minimap button", y,
+		function() return SHPlatesDB.minimapHidden end,
+		function(v) SHPlatesDB.minimapHidden = v; SHPlates.UpdateMinimapButton() end,
+		"Right-click and drag the button to move it around the minimap. /shp always opens the settings.")
 	AddControl(page, c); y = y - h
 
 	local showBtn = Button(child, "Show Nameplates", 150)
@@ -1894,6 +2014,7 @@ local recheck = nil
 loader:SetScript("OnEvent", function()
 	if event == "ADDON_LOADED" and arg1 == SHPlates.ADDON then
 		InitDB()
+		SHPlates.UpdateMinimapButton()
 	elseif SHPlates.disabled then
 		return  -- GudaPlates is running: keep settings loaded, do nothing else
 	elseif event == "PLAYER_ENTERING_WORLD" then
