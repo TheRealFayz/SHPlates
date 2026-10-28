@@ -24,7 +24,7 @@ Pick Grey or Neon, then Tank or DPS. That makes four templates (Grey Tank, Grey 
 Your theme and mode are saved per talent build, so swapping specs swaps SHPlates with you.
 
 ### Designer
-A sample plate you rearrange with the mouse. Drag any piece wherever you like:
+A simple WYSIWYG editor you rearrange with the mouse. Drag any piece wherever you like:
 - Name, level, health text, and spell name
 - Cast bar and spell icon
 - Raid icon and elite star
