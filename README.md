@@ -179,3 +179,14 @@ This addon is provided as-is for use with OctoWoW. If you'd like to edit or fork
 Special thanks to all the testers and community members who gave feedback during development.
 
 **May you always know who has aggro!**
+
+## More addons by Fayz
+
+All for OctoWoW and other 1.12 clients. A star on any of them is appreciated.
+
+- **[TotemNesia](https://github.com/TheRealFayz/TotemNesia)** is a totem management addon for Shaman.
+- **[SHAlts](https://github.com/TheRealFayz/SHAlts)** is an alt manager for OctoWoW and other 1.12 clients. It keeps track of everything your characters own and lets you look at any of them from one window, no matter which character you are playing.
+- **[Arcanum](https://github.com/TheRealFayz/Arcanum)** helps Mages manage their spells and items.
+- **[AutoSpam](https://github.com/TheRealFayz/AutoSpam)** posts your messages to chat channels at the interval you choose, from 1 to 10 minutes.
+- **[BigTimer](https://github.com/TheRealFayz/BigTimer)** is a see-through toolbar for starting BigWigs pull timers without writing macros, with built-in raid target marking.
+- **[TimeToDrink](https://github.com/TheRealFayz/TimeToDrink)** tells the tank when the healer is low on mana. It watches the healer you choose and posts a warning to party chat when their mana drops below your threshold.
