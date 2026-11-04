@@ -40,6 +40,7 @@ local TEMPLATE_DEFAULTS = {
 	barWidth = 1, barHeight = 1, fontSizeOffset = 0,
 	friendlyWidth = 1, friendlyHeight = 1, friendlyFontOffset = 0,
 	castWidth = 1, castHeight = 1, castFontOffset = 0, hideSpellIcon = false,
+	plateOffset = 0,   -- pixels the plate is lifted above the game's spot for it
 	castColorOn = false, castColor = { r = 1, g = .8, b = 0 },
 	debuffScale = 1, hideDebuffTimers = false,
 	fontFace = 1, healthTextAlign = 1, holderFontSize = 8,
@@ -1099,6 +1100,10 @@ local function BuildDisplaySection(page, child, y)
 		function() return EV().clickThrough end,
 		function(v) EV().clickThrough = v; ApplyAll(true) end,
 		"Plates ignore the mouse, so clicks go to the world behind them.")
+	AddControl(page, c); y = y - h
+	c, h = CreateSlider(child, "Height above the unit", y, -30, 60, 1, false,
+		function() return EV().plateOffset or 0 end,
+		function(v) EV().plateOffset = v; ApplyAll(true) end)
 	AddControl(page, c); y = y - h
 	c, h = CreateCheck(child, "Show plates only in combat", y,
 		function() return EV().autohide end,

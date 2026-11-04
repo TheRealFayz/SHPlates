@@ -91,8 +91,8 @@ local forceStyleUpdate = false
 local overlapMode = false   -- "Allow overlapping nameplates"
 
 -- Vanilla stacks plates using the size of the Blizzard frame. For overlap,
--- that frame shrinks to 1x1 and stops taking the mouse; our own click frame
--- (extended.clicker) takes over and forwards clicks to it.
+-- that frame shrinks to 1x1. Either way it stops taking the mouse; our own
+-- click frame (extended.clicker) takes the clicks and forwards them to it.
 -- Settings live in each template's vars (Grey/Tank, Neon/DPS...): the one
 -- being drawn right now first, then the template defaults, then the global
 -- settings (pfUI switch, learned casts and so on)
@@ -137,17 +137,16 @@ end
 
 SHPlates.IsFilteredOut = IsFilteredOut
 
+-- Our click frame always takes the clicks: the plate is drawn up off the
+-- client's frame (see UpdateStyle), so that frame no longer sits under it.
 local function ApplyPlateMouse(plate, clickable)
 	if Opt("clickThrough") then clickable = false end
+	-- a spell waiting for a ground target needs the click to reach the world
+	if SpellIsTargeting and SpellIsTargeting() then clickable = false end
 	local ext = plate.extended
-	if overlapMode then
-		if plate:GetWidth() > 1 then plate:SetWidth(1); plate:SetHeight(1) end
-		plate:EnableMouse(false)
-		ext.clicker:EnableMouse(clickable)
-	else
-		plate:EnableMouse(clickable)
-		ext.clicker:EnableMouse(false)
-	end
+	if overlapMode and plate:GetWidth() > 1 then plate:SetWidth(1); plate:SetHeight(1) end
+	plate:EnableMouse(false)
+	ext.clicker:EnableMouse(clickable)
 end
 
 -- Stacking: the game spaces plates using the Blizzard frame's size, so in
@@ -390,7 +389,22 @@ do
 		-- Frame
 		objectstyle = style.frame
 		SetObjectShape(extended, F.fw * F.hw, F.fh * F.hh)
-		SetObjectAnchor(extended, objectstyle.anchor, nameplate, objectstyle.x, objectstyle.y)
+		-- The client pins the TOP of its plate frame over the unit, and
+		-- stacking mode stretches that frame downward. Hanging off its top
+		-- edge keeps the plate at the same height in both modes (centered on
+		-- the frame, stacked plates sat half a frame lower, over the mob).
+		-- "Height above the unit" lifts it further. The Designer's sample
+		-- stays centered in its box.
+		extended:ClearAllPoints()
+		if nameplate.shpPreview then
+			extended:SetPoint(objectstyle.anchor or "CENTER", nameplate, "CENTER", objectstyle.x or 0, objectstyle.y or 0)
+		else
+			extended:SetPoint(objectstyle.anchor or "CENTER", nameplate, "TOP", objectstyle.x or 0,
+				(objectstyle.y or 0) + (Opt("plateOffset") or 0))
+		end
+		-- the click frame sits where the hitbox always did relative to the art
+		extended.clicker:ClearAllPoints()
+		extended.clicker:SetPoint("CENTER", extended, "CENTER", -(objectstyle.x or 0), -(objectstyle.y or 0))
 		for i = 1, table.getn(LAYOUT_ORDER) do
 			objectname = LAYOUT_ORDER[i]
 			local object = visual[objectname] or bars[objectname]
@@ -1245,7 +1259,7 @@ do
 		-- border, and Grey's border could end up drawn over the name
 		v.name = ext:CreateFontString(nil, "OVERLAY")
 
-		-- Click frame used in overlap mode
+		-- Click frame (takes the clicks and forwards them to the plate)
 		local clicker = CreateFrame("Button", nil, ext)
 		clicker:SetPoint("CENTER", plate, "CENTER", 0, 0)
 		clicker:SetWidth(100); clicker:SetHeight(30)
