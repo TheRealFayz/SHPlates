@@ -137,6 +137,21 @@ end
 
 SHPlates.IsFilteredOut = IsFilteredOut
 
+-- Size of the client's plate frame, which is what it spaces plates by.
+-- Stacking: our full size (worked out in UpdateStackingSize). Overlap, and
+-- hidden plates in stacking mode: a single point. A hidden plate that kept
+-- its full size still pushed the shown ones around, so in a crowd of hidden
+-- friendly players your target's plate kept jumping from spot to spot.
+local function ApplyFrameSize(plate)
+	local ext = plate.extended
+	local w, h = ext.stackW, ext.stackH
+	if overlapMode or ext:GetAlpha() == 0 then w, h = 1, 1
+	elseif not w then return end
+	if math.abs(plate:GetWidth() - w) > .5 or math.abs(plate:GetHeight() - h) > .5 then
+		plate:SetWidth(w); plate:SetHeight(h)
+	end
+end
+
 -- Our click frame always takes the clicks: the plate is drawn up off the
 -- client's frame (see UpdateStyle), so that frame no longer sits under it.
 local function ApplyPlateMouse(plate, clickable)
@@ -144,7 +159,7 @@ local function ApplyPlateMouse(plate, clickable)
 	-- a spell waiting for a ground target needs the click to reach the world
 	if SpellIsTargeting and SpellIsTargeting() then clickable = false end
 	local ext = plate.extended
-	if overlapMode and plate:GetWidth() > 1 then plate:SetWidth(1); plate:SetHeight(1) end
+	ApplyFrameSize(plate)
 	plate:EnableMouse(false)
 	ext.clicker:EnableMouse(clickable)
 end
@@ -160,10 +175,8 @@ local function UpdateStackingSize(plate)
 	local scale = ext:GetScale() or 1
 	local w = math.max(st.hitbox.width or 0, st.frame.width or 0) * scale
 	local h = math.max(st.hitbox.height or 0, st.frame.height or 0) * scale
-	if ext.stackW ~= w or ext.stackH ~= h or math.abs(plate:GetWidth() - w) > .5 then
-		ext.stackW, ext.stackH = w, h
-		plate:SetWidth(w); plate:SetHeight(h)
-	end
+	ext.stackW, ext.stackH = w, h
+	ApplyFrameSize(plate)
 end
 
 local POLL_INTERVAL = .2     -- full data refresh of visible plates
@@ -690,8 +703,13 @@ do
 				region:SetAlpha(0)
 			end
 		end
-		if regions.name.SetAlpha then regions.name:SetAlpha(0) else regions.name:SetWidth(.1) end
-		if regions.level.SetAlpha then regions.level:SetAlpha(0) else regions.level:SetWidth(.1) end
+		-- Alpha alone isn't enough: the client puts the name back when it
+		-- moves a plate to another unit, and it showed until our next update.
+		-- A near-zero width (what pfUI does) stays put. GetText still works.
+		if regions.name.SetAlpha then regions.name:SetAlpha(0) end
+		regions.name:SetWidth(.001)
+		if regions.level.SetAlpha then regions.level:SetAlpha(0) end
+		regions.level:SetWidth(.001)
 		-- Only once per show: re-setting the bar texture can briefly reset its
 		-- color, which made neutral (yellow) mobs read as hostile and flicker
 		if not extended.healthTexHidden then
@@ -1408,12 +1426,8 @@ do
 		-- Mouseover changes (the Blizzard glow region is the source of truth)
 		for p in pairs(PlatesVisible) do
 			-- the client resets plate sizes, so enforce ours every frame
-			-- (pfUI does the same): 1x1 for overlap, full size for stacking
-			if overlapMode then
-				if p:GetWidth() > 1 then p:SetWidth(1); p:SetHeight(1) end
-			elseif p.extended.stackW and math.abs(p:GetWidth() - p.extended.stackW) > .5 then
-				p:SetWidth(p.extended.stackW); p:SetHeight(p.extended.stackH)
-			end
+			-- (pfUI does the same)
+			ApplyFrameSize(p)
 			local ext = p.extended
 			local hide = ShouldFastHide(p)
 			if hide then
